@@ -54,7 +54,7 @@ public class Bank {
         // Initial setup output
         printWalletAndConnectionInfo(wallet, WALLET_FILE_NAME);
 
-        System.out.println("\n\n");
+        System.out.println("\n");
         Wallet secondWallet = checkOrCreateWallet(params, SECOND_WALLET_FILE_NAME);
         secondWallet.addCoinsReceivedEventListener(new WalletCoinsReceivedEventListener() {
             @Override
@@ -71,8 +71,9 @@ public class Bank {
 
         // Continuous balance check loop
         while (true) {
+            System.out.println();
             System.out.println(WALLET_FILE_NAME + " balance (in satoshis): " + wallet.getBalance().value);
-            System.out.println(SECOND_WALLET_FILE_NAME + " balance (in satoshis): " + wallet.getBalance().value);
+            System.out.println(SECOND_WALLET_FILE_NAME + " balance (in satoshis): " + secondWallet.getBalance().value);
             System.out.println("Block height: " + walletAppKit.chain().getBestChainHeight());
             System.out.println("Peers: " + walletAppKit.peerGroup().getConnectedPeers().size());
 
@@ -83,10 +84,10 @@ public class Bank {
             // Create a transaction
             Coin amountToSend = Coin.parseCoin("0.00001");
             Address destinationAddress = secondWallet.currentReceiveAddress();
-            Transaction transaction = walletAppKit.wallet().createSend(destinationAddress, amountToSend);
+            Transaction transaction = wallet.createSend(destinationAddress, amountToSend);
 
             // Sign and commit the transaction
-            walletAppKit.wallet().commitTx(transaction);
+            wallet.commitTx(transaction);
 
             // Broadcast the transaction to the network
             walletAppKit.peerGroup().broadcastTransaction(transaction);
