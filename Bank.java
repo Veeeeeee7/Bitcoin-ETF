@@ -1,9 +1,11 @@
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.InsufficientMoneyException;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.params.TestNet3Params;
+import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.UnreadableWalletException;
 import org.bitcoinj.wallet.Wallet;
 import org.bitcoinj.wallet.listeners.WalletCoinsReceivedEventListener;
@@ -26,6 +28,7 @@ public class Bank {
     private static final long RECENT_PERIOD = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
     private static List<Transaction> recentTransactions = new ArrayList<>();
     private static WalletAppKit walletAppKit = null;
+    private static int count = 0;
 
     static {
         // Assuming SLF4J is bound to logback
@@ -71,9 +74,24 @@ public class Bank {
 
         // Continuous balance check loop
         while (true) {
+            // Coin amountToSend = Coin.parseCoin("0.00001");
+            // Address destinationAddress =
+            // secondWalletAppKit.wallet().currentReceiveAddress();
+            // Transaction transaction =
+            // walletAppKit.wallet().createSend(destinationAddress, amountToSend);
+
+            // // Sign and commit the transaction
+            // walletAppKit.wallet().commitTx(transaction);
+
+            // // Broadcast the transaction to the network
+            // walletAppKit.peerGroup().broadcastTransaction(transaction);
+            // System.out.println("\nCreated transaction for 0.00001 BTC\n");
+
             System.out.println();
-            System.out.println(WALLET_FILE_NAME + " balance (in satoshis): " + wallet.getBalance().value);
-            System.out.println(SECOND_WALLET_FILE_NAME + " balance (in satoshis): " + secondWallet.getBalance().value);
+            System.out.println(WALLET_FILE_NAME + " : " + wallet.currentReceiveAddress()
+                    + " : balance (in satoshis): " + wallet.getBalance().value);
+            System.out.println(SECOND_WALLET_FILE_NAME + " : " + secondWallet.currentReceiveAddress()
+                    + " : balance (in satoshis): " + secondWallet.getBalance().value);
             System.out.println("Block height: " + walletAppKit.chain().getBestChainHeight());
             System.out.println("Peers: " + walletAppKit.peerGroup().getConnectedPeers().size());
 
@@ -82,31 +100,39 @@ public class Bank {
             recentTransactions.removeIf(tx -> currentTime - tx.getUpdateTime().getTime() > RECENT_PERIOD);
 
             // Create a transaction
-            Coin amountToSend = Coin.parseCoin("0.00001");
-            Address destinationAddress = secondWallet.currentReceiveAddress();
-            Transaction transaction = wallet.createSend(destinationAddress, amountToSend);
+            if (count < 3 && wallet.getBalance().value > 0) {
+                transferFunds(wallet, secondWallet, Coin.parseCoin("0.00001"));
+                count++;
+            }
 
-            // Sign and commit the transaction
-            wallet.commitTx(transaction);
-
-            // Broadcast the transaction to the network
-            walletAppKit.peerGroup().broadcastTransaction(transaction);
-
-            TimeUnit.SECONDS.sleep(30); // Adjust check interval as needed
+            TimeUnit.SECONDS.sleep(10); // Adjust check interval as needed
         }
 
+    }
+
+    private static void transferFunds(Wallet sourceWallet, Wallet destinationWallet, Coin amount) throws Exception {
+        System.out.println("\nSending " + amount.toFriendlyString() + " to "
+                + destinationWallet.currentReceiveAddress().toString());
+        SendRequest request = SendRequest.to(destinationWallet.currentReceiveAddress(), amount);
+        request.ensureMinRequiredFee = true;
+        request.feePerKb = Transaction.DEFAULT_TX_FEE;
+        Wallet.SendResult sendResult = sourceWallet.sendCoins(walletAppKit.peerGroup(), request);
+        System.out.println("Transaction hash: " + sendResult.tx.getTxId());
     }
 
     // Helper Functions
     private static Wallet checkOrCreateWallet(NetworkParameters params, String walletFileName)
             throws IOException, UnreadableWalletException {
+
         walletAppKit = new WalletAppKit(params, new File("."), walletFileName);
         walletAppKit.setBlockingStartup(false);
         walletAppKit.startAsync();
         walletAppKit.awaitRunning();
         walletAppKit.peerGroup().setBloomFilterFalsePositiveRate(0.001); // Example: 0.1% false positive rate
 
-        System.out.println(walletFileName + " address: " + walletAppKit.wallet().currentReceiveAddress().toString());
+        // System.out
+        // .println(walletFileName + " address: " +
+        // walletAppKit.wallet().currentReceiveAddress().toString());
 
         File walletFile = new File(walletFileName + ".wallet");
 
@@ -118,6 +144,7 @@ public class Bank {
             wallet.saveToFile(walletFile);
             throw new UnreadableWalletException("Wallet not found, created a new one");
         }
+
     }
 
     private static void printWalletAndConnectionInfo(Wallet wallet, String walletFileName) {
